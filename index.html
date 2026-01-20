@@ -519,6 +519,8 @@
             ? "일본어 메뉴판 이미지야. JSON으로 분석해줘. [규칙] 1. category(섹션명), items 배열로 구성. 2. items는 menu_jp(원문), menu_tr(한국어번역), price(숫자만), desc(짧은설명), voice(발음). 3. 설명은 자연스럽게. 4. 절대 텍스트에 별표(*)를 넣지 마."
             : "Analyze this Japanese menu image into JSON. [Rules] 1. Structure: category, items array. 2. Item fields: menu_jp, menu_tr(English), price, desc, voice. 3. Do NOT use asterisks(*).";
 
+        const mimeType = currentFile ? currentFile.type : "image/jpeg";
+
         const response = await fetch(AI_PROXY_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -526,13 +528,23 @@
                 contents: [{
                     parts: [
                         { text: prompt },
-                        { inline_data: { mime_type: "image/jpeg", data: base64 } }
+                        { inline_data: { mime_type: mimeType, data: base64 } }
                     ]
                 }]
             })
         });
 
-        if (!response.ok) throw new Error("Server Error");
+        if (!response.ok) {
+            const errorText = await response.text();
+            let errMsg = `Server Error (${response.status})`;
+            try {
+                const json = JSON.parse(errorText);
+                if (json.error && json.error.message) errMsg = json.error.message;
+            } catch(e) {
+                errMsg += `: ${errorText}`;
+            }
+            throw new Error(errMsg);
+        }
         const json = await response.json();
         let text = json.candidates[0].content.parts[0].text;
         // 후처리: 혹시 모를 * 제거
